@@ -91,12 +91,30 @@ export async function requireProviderByUserId(pool: DbPool, userId: string): Pro
   return provider;
 }
 
+/**
+ * Rehydrates the Date-typed columns after a cache round-trip. Required for
+ * RedisCache (values pass through JSON.stringify/parse, so Date fields come
+ * back as plain strings) and harmless for InMemoryCache (which stores the
+ * object by reference and never actually loses the Date instance) — without
+ * this, a cache hit would return a Provider whose .createdAt/.updatedAt/
+ * .verificationReviewedAt lack .toISOString(), breaking every DTO
+ * conversion downstream. See dto/providerDto.ts.
+ */
+function reviveProviderDates(provider: Provider): Provider {
+  return {
+    ...provider,
+    createdAt: new Date(provider.createdAt),
+    updatedAt: new Date(provider.updatedAt),
+    verificationReviewedAt: provider.verificationReviewedAt ? new Date(provider.verificationReviewedAt) : null,
+  };
+}
+
 export async function getProviderByIdOrSlug(pool: DbPool, cache: Cache, idOrSlug: string, includeInactive: boolean): Promise<Provider> {
   const cacheKey = CACHE_KEY_PREFIX + idOrSlug;
   if (!includeInactive) {
     const cached = await cache.get<Provider>(cacheKey);
     if (cached) {
-      return cached;
+      return reviveProviderDates(cached);
     }
   }
 
