@@ -1,0 +1,22 @@
+# Local development infrastructure only — Postgres. The service itself runs
+# via `npm run dev` against this, not as a container here, so `tsx watch`
+# keeps working. See README.md "Local development".
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: provider
+      POSTGRES_PASSWORD: provider
+      POSTGRES_DB: servora_provider
+    ports:
+      - '5434:5432'
+    volumes:
+      - servora-provider-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U provider']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  servora-provider-postgres:
