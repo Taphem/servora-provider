@@ -31,6 +31,11 @@ const rawSchema = z.object({
 
   DEFAULT_PAGE_SIZE: z.coerce.number().int().positive().max(100).default(20),
   MAX_PAGE_SIZE: z.coerce.number().int().positive().max(500).default(100),
+
+  CLOUDINARY_CLOUD_NAME: z.string().min(1, 'CLOUDINARY_CLOUD_NAME is required'),
+  CLOUDINARY_API_KEY: z.string().min(1, 'CLOUDINARY_API_KEY is required'),
+  CLOUDINARY_API_SECRET: z.string().min(1, 'CLOUDINARY_API_SECRET is required'),
+  CLOUDINARY_PROVIDER_UPLOAD_PRESET: z.string().min(1, 'CLOUDINARY_PROVIDER_UPLOAD_PRESET is required'),
 });
 
 export type Env = ReturnType<typeof loadEnv>;

@@ -43,21 +43,23 @@ export async function createProvider(pool: DbPool, userId: string, body: CreateP
     });
   }
 
-  const slug = body.slug ?? slugify(body.displayName);
-  try {
-    return await insertProvider(pool, {
-      userId,
-      displayName: body.displayName,
-      slug,
-      bio: body.bio ?? null,
-      profilePhotoUrl: body.profilePhotoUrl ?? null,
-      yearsExperience: body.yearsExperience ?? null,
-      businessName: body.businessName ?? null,
-      languages: body.languages,
-      timezone: body.timezone,
-    });
-  } catch (error) {
-    if (isUniqueViolation(error)) {
+  const baseSlug = slugify(body.displayName) || 'provider';
+  for (let suffix = 1; suffix <= 100; suffix += 1) {
+    const slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
+    try {
+      return await insertProvider(pool, {
+        userId,
+        displayName: body.displayName,
+        slug,
+        bio: body.bio ?? null,
+        profilePhotoUrl: body.profilePhotoUrl ?? null,
+        yearsExperience: body.yearsExperience ?? null,
+        businessName: body.businessName ?? null,
+        languages: body.languages,
+        timezone: body.timezone,
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
       if ((error as { constraint?: string }).constraint === 'providers_user_id_unique') {
         throw new AppError({
           statusCode: 409,
@@ -65,14 +67,14 @@ export async function createProvider(pool: DbPool, userId: string, body: CreateP
           message: 'A provider profile already exists for this account.',
         });
       }
-      throw new AppError({
-        statusCode: 409,
-        code: ErrorCode.PROVIDER_SLUG_ALREADY_EXISTS,
-        message: 'A provider with this slug already exists.',
-      });
+      // A simultaneous signup may claim a candidate between attempts.
     }
-    throw error;
   }
+  throw new AppError({
+    statusCode: 409,
+    code: ErrorCode.PROVIDER_SLUG_ALREADY_EXISTS,
+    message: 'Could not generate a unique profile URL. Please try again.',
+  });
 }
 
 export async function requireProviderById(pool: DbPool, id: string): Promise<Provider> {
@@ -156,7 +158,6 @@ export async function updateProvider(pool: DbPool, cache: Cache, id: string, pat
   try {
     const updated = await updateProviderQuery(pool, id, {
       displayName: patch.displayName,
-      slug: patch.slug,
       bio: patch.bio,
       profilePhotoUrl: patch.profilePhotoUrl,
       yearsExperience: patch.yearsExperience,

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { languageCodeSchema, slugSchema, timezoneSchema } from './common.js';
+import { languageCodeSchema, timezoneSchema } from './common.js';
 
 const displayName = z.string().trim().min(2).max(150);
 const bio = z.string().trim().min(1).max(2000);
@@ -8,10 +8,18 @@ const yearsExperience = z.number().int().min(0).max(100);
 const businessName = z.string().trim().min(1).max(200);
 const languages = z.array(languageCodeSchema).max(20);
 
+export function profilePhotoUrlSchema(cloudName: string, userId: string) {
+  const escapedCloudName = cloudName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedUserId = userId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return z.string().trim().max(2048).regex(
+    new RegExp(`^https://res\\.cloudinary\\.com/${escapedCloudName}/image/upload/(?:v\\d+/)?servora/providers/${escapedUserId}/[0-9a-f-]+\\.(?:jpg|jpeg|png|webp)$`, 'i'),
+    'Profile photo must be a Servora-uploaded JPG, JPEG, PNG, or WebP image.',
+  );
+}
+
 export const createProviderBodySchema = z
   .object({
     displayName,
-    slug: slugSchema.optional(),
     bio: bio.optional(),
     profilePhotoUrl: profilePhotoUrl.optional(),
     yearsExperience: yearsExperience.optional(),
@@ -25,7 +33,6 @@ export type CreateProviderBody = z.infer<typeof createProviderBodySchema>;
 export const updateProviderBodySchema = z
   .object({
     displayName: displayName.optional(),
-    slug: slugSchema.optional(),
     bio: bio.nullable().optional(),
     profilePhotoUrl: profilePhotoUrl.nullable().optional(),
     yearsExperience: yearsExperience.nullable().optional(),
@@ -36,6 +43,18 @@ export const updateProviderBodySchema = z
   .strict()
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field must be provided.' });
 export type UpdateProviderBody = z.infer<typeof updateProviderBodySchema>;
+
+export function parseCreateProviderBody(body: unknown, cloudName: string, userId: string): CreateProviderBody {
+  return createProviderBodySchema.extend({ profilePhotoUrl: profilePhotoUrlSchema(cloudName, userId).optional() }).parse(body);
+}
+
+export function parseUpdateProviderBody(body: unknown, cloudName: string, userId: string): UpdateProviderBody {
+  const parsed = updateProviderBodySchema.parse(body);
+  if (parsed.profilePhotoUrl !== undefined && parsed.profilePhotoUrl !== null) {
+    parsed.profilePhotoUrl = profilePhotoUrlSchema(cloudName, userId).parse(parsed.profilePhotoUrl);
+  }
+  return parsed;
+}
 
 export function buildListProvidersQuerySchema(defaultPageSize: number, maxPageSize: number) {
   return z.object({

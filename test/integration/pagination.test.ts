@@ -8,7 +8,7 @@ async function createProvider(testApp: TestApp, index: number) {
     method: 'POST',
     url: '/api/v1/providers/me',
     headers,
-    payload: { displayName: `Provider ${index}`, slug: `provider-${index}` },
+    payload: { displayName: `Provider ${index}` },
   });
   await testApp.app.inject({ method: 'POST', url: '/api/v1/providers/me/activate', headers });
   return created.json();

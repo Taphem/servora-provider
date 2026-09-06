@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createProviderBodySchema, adminSetStatusBodySchema } from '../../src/schemas/providers.js';
+import { createProviderBodySchema, adminSetStatusBodySchema, parseCreateProviderBody } from '../../src/schemas/providers.js';
 import { createServiceAreaBodySchema } from '../../src/schemas/serviceAreas.js';
 import { createProviderServiceBodySchema } from '../../src/schemas/providerServices.js';
 
@@ -17,6 +17,27 @@ describe('createProviderBodySchema', () => {
   it('rejects unknown fields (strict)', () => {
     const result = createProviderBodySchema.safeParse({ displayName: 'Jane', email: 'jane@example.com' });
     expect(result.success).toBe(false);
+  });
+
+  it('keeps business name optional and accepts a signed Cloudinary photo reference', () => {
+    const body = parseCreateProviderBody(
+      { displayName: 'Asha Cleaner', profilePhotoUrl: 'https://res.cloudinary.com/servora-test/image/upload/v1/servora/providers/33333333-3333-3333-3333-333333333333/44444444-4444-4444-4444-444444444444.webp' },
+      'servora-test', '33333333-3333-3333-3333-333333333333',
+    );
+    expect(body.businessName).toBeUndefined();
+    expect(body.profilePhotoUrl).toContain('/servora/providers/');
+  });
+
+  it('rejects a pasted or non-Cloudinary profile photo URL', () => {
+    expect(() => parseCreateProviderBody({ displayName: 'Asha Cleaner', profilePhotoUrl: 'https://example.com/photo.jpg' }, 'servora-test', '33333333-3333-3333-3333-333333333333')).toThrow();
+  });
+
+  it('rejects a Cloudinary asset issued for a different provider', () => {
+    expect(() => parseCreateProviderBody({ displayName: 'Asha Cleaner', profilePhotoUrl: 'https://res.cloudinary.com/servora-test/image/upload/servora/providers/44444444-4444-4444-4444-444444444444/55555555-5555-5555-5555-555555555555.jpg' }, 'servora-test', '33333333-3333-3333-3333-333333333333')).toThrow();
+  });
+
+  it('does not accept a caller-chosen slug', () => {
+    expect(createProviderBodySchema.safeParse({ displayName: 'Asha Cleaner', slug: 'someone-else' }).success).toBe(false);
   });
 });
 

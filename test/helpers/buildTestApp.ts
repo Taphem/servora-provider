@@ -18,9 +18,15 @@ export function buildTestApp(envOverrides: Record<string, string> = {}): TestApp
   const env = loadEnv({
     ...process.env,
     NODE_ENV: 'test',
-    DATABASE_URL: process.env['TEST_DATABASE_URL'] ?? process.env['DATABASE_URL'] ?? '',
+    // Health-route tests intentionally do not connect to Postgres, but the
+    // application still validates its production-shaped configuration.
+    DATABASE_URL: process.env['TEST_DATABASE_URL'] ?? process.env['DATABASE_URL'] ?? 'postgresql://provider:provider@localhost:5434/servora_provider',
     LOG_LEVEL: 'silent',
     SERVICES_API_BASE_URL: process.env['SERVICES_API_BASE_URL'] ?? 'http://localhost:4004',
+    CLOUDINARY_CLOUD_NAME: 'servora-test',
+    CLOUDINARY_API_KEY: 'test-key',
+    CLOUDINARY_API_SECRET: 'test-secret',
+    CLOUDINARY_PROVIDER_UPLOAD_PRESET: 'servora_provider_photos',
     ...envOverrides,
   });
 

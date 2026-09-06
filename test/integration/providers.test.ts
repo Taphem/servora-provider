@@ -43,11 +43,35 @@ describe.skipIf(!isInfraAvailable())('provider profile', () => {
     expect(second.json().error.code).toBe('PROVIDER_ALREADY_EXISTS');
   });
 
-  it('rejects a duplicate slug with 409 PROVIDER_SLUG_ALREADY_EXISTS', async () => {
-    await createMyProvider(testApp, PROVIDER_HEADERS, { slug: 'jane-plumber' });
-    const second = await createMyProvider(testApp, OTHER_PROVIDER_HEADERS, { slug: 'jane-plumber' });
-    expect(second.statusCode).toBe(409);
-    expect(second.json().error.code).toBe('PROVIDER_SLUG_ALREADY_EXISTS');
+  it('assigns a collision-safe slug when two providers have the same display name', async () => {
+    await createMyProvider(testApp, PROVIDER_HEADERS);
+    const second = await createMyProvider(testApp, OTHER_PROVIDER_HEADERS);
+    expect(second.statusCode).toBe(201);
+    expect(second.json().slug).toBe('jane-plumber-2');
+  });
+
+  it('issues a short-lived signed direct-upload request only to the authenticated provider', async () => {
+    const response = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/v1/providers/me/profile-photo-upload',
+      headers: PROVIDER_HEADERS,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      uploadUrl: 'https://api.cloudinary.com/v1_1/servora-test/image/upload',
+      apiKey: 'test-key',
+      uploadPreset: 'servora_provider_photos',
+      publicId: expect.stringContaining(`servora/providers/${PROVIDER_HEADERS['x-user-id']}/`),
+      allowedFormats: ['jpg', 'jpeg', 'png', 'webp'],
+      maxBytes: 5 * 1024 * 1024,
+    });
+  });
+
+  it('persists a caller-owned Cloudinary photo URL on the provider profile', async () => {
+    const photoUrl = `https://res.cloudinary.com/servora-test/image/upload/v123/servora/providers/${PROVIDER_HEADERS['x-user-id']}/55555555-5555-5555-5555-555555555555.webp`;
+    const response = await createMyProvider(testApp, PROVIDER_HEADERS, { profilePhotoUrl: photoUrl });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().profilePhotoUrl).toBe(photoUrl);
   });
 
   it('GET /me returns the private DTO including userId but never admin-only fields', async () => {
