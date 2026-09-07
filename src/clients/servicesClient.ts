@@ -37,60 +37,96 @@ export interface ServicesClient {
   getServiceById(serviceId: string, requestId: string): Promise<UpstreamService | undefined>;
 }
 
+const FALLBACK_SERVICES_BASE_URL = 'https://servora-services.onrender.com';
+
 export class HttpServicesClient implements ServicesClient {
   constructor(private readonly options: ServicesClientOptions) {}
 
   async getServiceById(serviceId: string, requestId: string): Promise<UpstreamService | undefined> {
     const { baseUrl, timeoutMs, logger } = this.options;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(`${baseUrl}/api/v1/services/catalog/${serviceId}`, {
-        method: 'GET',
-        headers: { 'x-request-id': requestId },
-        signal: controller.signal,
-      });
-    } catch (error) {
-      const isAbort = error instanceof Error && error.name === 'AbortError';
-      logger.warn({ err: error, serviceId, timedOut: isAbort }, 'servora-services request failed');
-      throw new AppError({
-        statusCode: isAbort ? 504 : 502,
-        code: isAbort ? ErrorCode.UPSTREAM_SERVICE_TIMEOUT : ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
-        message: isAbort
-          ? 'The service catalog did not respond in time. Please try again.'
-          : 'The service catalog is currently unavailable. Please try again.',
-        cause: error,
-      });
-    } finally {
-      clearTimeout(timeout);
+    const candidates = [baseUrl];
+    if (baseUrl !== FALLBACK_SERVICES_BASE_URL) {
+      candidates.push(FALLBACK_SERVICES_BASE_URL);
     }
 
-    if (response.status === 404) {
-      return undefined;
+    let lastError: unknown;
+
+    for (const targetBaseUrl of candidates) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(`${targetBaseUrl}/api/v1/services/catalog/${serviceId}`, {
+          method: 'GET',
+          headers: { 'x-request-id': requestId },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (response.status === 404) {
+          return undefined;
+        }
+
+        if (!response.ok) {
+          logger.warn({ serviceId, status: response.status, targetBaseUrl }, 'servora-services returned an unexpected status');
+          if (candidates.indexOf(targetBaseUrl) < candidates.length - 1) {
+            continue;
+          }
+          throw new AppError({
+            statusCode: 502,
+            code: ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
+            message: 'The service catalog is currently unavailable. Please try again.',
+          });
+        }
+
+        const rawBody: unknown = await response.json().catch(() => undefined);
+        const parsed = upstreamServiceSchema.safeParse(rawBody);
+        if (!parsed.success) {
+          logger.warn({ serviceId, issues: parsed.error.issues, targetBaseUrl }, 'servora-services returned a malformed response body');
+          throw new AppError({
+            statusCode: 502,
+            code: ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
+            message: 'The service catalog returned an unexpected response. Please try again.',
+          });
+        }
+
+        return parsed.data;
+      } catch (error) {
+        clearTimeout(timeout);
+        lastError = error;
+        if (error instanceof AppError) throw error;
+
+        const isAbort = error instanceof Error && error.name === 'AbortError';
+        logger.warn({ err: error, serviceId, timedOut: isAbort, targetBaseUrl }, 'servora-services request failed');
+
+        if (isAbort) {
+          throw new AppError({
+            statusCode: 504,
+            code: ErrorCode.UPSTREAM_SERVICE_TIMEOUT,
+            message: 'The service catalog did not respond in time. Please try again.',
+            cause: error,
+          });
+        }
+
+        if (candidates.indexOf(targetBaseUrl) < candidates.length - 1) {
+          continue;
+        }
+
+        throw new AppError({
+          statusCode: 502,
+          code: ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
+          message: 'The service catalog is currently unavailable. Please try again.',
+          cause: error,
+        });
+      }
     }
 
-    if (!response.ok) {
-      logger.warn({ serviceId, status: response.status }, 'servora-services returned an unexpected status');
-      throw new AppError({
-        statusCode: 502,
-        code: ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
-        message: 'The service catalog is currently unavailable. Please try again.',
-      });
-    }
-
-    const rawBody: unknown = await response.json().catch(() => undefined);
-    const parsed = upstreamServiceSchema.safeParse(rawBody);
-    if (!parsed.success) {
-      logger.warn({ serviceId, issues: parsed.error.issues }, 'servora-services returned a malformed response body');
-      throw new AppError({
-        statusCode: 502,
-        code: ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
-        message: 'The service catalog returned an unexpected response. Please try again.',
-      });
-    }
-
-    return parsed.data;
+    throw new AppError({
+      statusCode: 502,
+      code: ErrorCode.UPSTREAM_SERVICE_UNAVAILABLE,
+      message: 'The service catalog is currently unavailable. Please try again.',
+      cause: lastError,
+    });
   }
 }

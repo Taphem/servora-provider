@@ -37,10 +37,10 @@ export async function findProviderServiceByServiceId(
   providerId: string,
   serviceId: string,
 ): Promise<ProviderService | undefined> {
-  const result = await pool.query('SELECT * FROM provider_services WHERE provider_id = $1 AND service_id = $2', [
-    providerId,
-    serviceId,
-  ]);
+  const result = await pool.query(
+    'SELECT * FROM provider_services WHERE provider_id = $1 AND (service_id = $2 OR id = $2)',
+    [providerId, serviceId],
+  );
   return result.rows[0] ? mapProviderServiceRow(result.rows[0]) : undefined;
 }
 
@@ -106,16 +106,16 @@ export async function updateProviderServiceByServiceId(
   values.push(providerId, serviceId);
 
   const result = await pool.query(
-    `UPDATE provider_services SET ${setClauses.join(', ')} WHERE provider_id = $${i++} AND service_id = $${i} RETURNING *`,
+    `UPDATE provider_services SET ${setClauses.join(', ')} WHERE provider_id = $${i++} AND (service_id = $${i} OR id = $${i}) RETURNING *`,
     values,
   );
   return result.rows[0] ? mapProviderServiceRow(result.rows[0]) : undefined;
 }
 
 export async function deleteProviderServiceByServiceId(pool: DbPool, providerId: string, serviceId: string): Promise<boolean> {
-  const result = await pool.query('DELETE FROM provider_services WHERE provider_id = $1 AND service_id = $2', [
-    providerId,
-    serviceId,
-  ]);
+  const result = await pool.query(
+    'DELETE FROM provider_services WHERE provider_id = $1 AND (service_id = $2 OR id = $2)',
+    [providerId, serviceId],
+  );
   return (result.rowCount ?? 0) > 0;
 }
