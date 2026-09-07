@@ -14,7 +14,7 @@ export function registerMyProviderProfileRoutes(app: FastifyInstance, ctx: AppCo
     const publicId = `servora/providers/${request.identity!.userId}/${randomUUID()}`;
     const allowedFormats = 'jpg,jpeg,png,webp';
     const maxFileSize = 5 * 1024 * 1024;
-    const signatureBase = `allowed_formats=${allowedFormats}&max_file_size=${maxFileSize}&public_id=${publicId}&timestamp=${timestamp}&upload_preset=${ctx.env.CLOUDINARY_PROVIDER_UPLOAD_PRESET}`;
+    const signatureBase = `allowed_formats=${allowedFormats}&public_id=${publicId}&timestamp=${timestamp}&upload_preset=${ctx.env.CLOUDINARY_PROVIDER_UPLOAD_PRESET}`;
     const signature = createHash('sha1').update(signatureBase + ctx.env.CLOUDINARY_API_SECRET).digest('hex');
 
     return {
