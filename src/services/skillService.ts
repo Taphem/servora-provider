@@ -1,6 +1,7 @@
 import type { DbPool } from '../db/pool.js';
 import {
   findSkillById,
+  findSkillBySlug,
   findSkillsByIds,
   insertSkill,
   listSkills as listSkillsQuery,
@@ -26,6 +27,29 @@ export async function createSkill(pool: DbPool, body: CreateSkillBody): Promise<
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new AppError({ statusCode: 409, code: ErrorCode.SKILL_SLUG_ALREADY_EXISTS, message: 'A skill with this slug already exists.' });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Self-service create-or-find: a provider typing a skill name that's
+ * already in the catalog (e.g. two providers both type "Leak Detection")
+ * must land on the same shared skill row, not a duplicate — so a slug
+ * collision on insert is resolved by looking the existing row up and
+ * returning it, rather than surfacing an error the caller has no useful
+ * way to act on (they didn't choose the slug; they just typed a name).
+ */
+export async function createOrFindSkillByName(pool: DbPool, name: string): Promise<Skill> {
+  const slug = slugify(name);
+  try {
+    return await insertSkill(pool, { name, slug, status: SkillStatus.ACTIVE });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      const existing = await findSkillBySlug(pool, slug);
+      if (existing) {
+        return existing;
+      }
     }
     throw error;
   }

@@ -20,6 +20,22 @@ export const updateSkillBodySchema = z
   .refine((body) => Object.keys(body).length > 0, { message: 'At least one field must be provided.' });
 export type UpdateSkillBody = z.infer<typeof updateSkillBodySchema>;
 
+/**
+ * Self-service skill creation for a BUSINESS_OWNER — deliberately just a
+ * name. Unlike createSkillBodySchema (admin-only), a provider never
+ * chooses a slug or status directly: the slug is always derived
+ * server-side and every self-created skill starts ACTIVE, exactly like an
+ * admin-created one. This reuses the existing `skills` table as-is (no new
+ * columns, no provider-ownership concept on the row) — see
+ * skillService.createOrFindSkillByName.
+ */
+export const createProviderSkillBodySchema = z
+  .object({
+    name: z.string().trim().min(2).max(150),
+  })
+  .strict();
+export type CreateProviderSkillBody = z.infer<typeof createProviderSkillBodySchema>;
+
 export const replaceProviderSkillsBodySchema = z
   .object({
     skillIds: z.array(uuidSchema).max(50),

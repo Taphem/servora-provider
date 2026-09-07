@@ -182,7 +182,8 @@ A caller identified as `ADMIN`/`SUPER_ADMIN` additionally sees non-`ACTIVE` prov
 | POST | `/api/v1/providers/me/verification/submit` | `UNVERIFIED`/`REJECTED` → `PENDING_REVIEW`. |
 | GET / POST | `/api/v1/providers/me/services` | List / add an offering. |
 | PATCH / DELETE | `/api/v1/providers/me/services/:serviceId` | Update / remove an offering (addressed by `service_id`, unique per provider). |
-| GET / PUT | `/api/v1/providers/me/skills` | Replace the entire skill set atomically. |
+| GET / PUT | `/api/v1/providers/me/skills` | Replace the entire skill set atomically (by existing skill id). |
+| POST | `/api/v1/providers/me/skills` | Create-or-find a skill by name (`{ name }`) — lets a provider define expertise (e.g. "Split AC servicing") with no corresponding Services catalog entry. Idempotent on a name/slug collision; does not itself associate the skill with the caller — pass its returned `id` in the next `PUT`. |
 | GET / POST | `/api/v1/providers/me/service-areas` | List / add a service area. |
 | DELETE | `/api/v1/providers/me/service-areas/:id` | Remove a service area. |
 | GET / PUT | `/api/v1/providers/me/availability/weekly` | Replace the entire weekly schedule atomically. |

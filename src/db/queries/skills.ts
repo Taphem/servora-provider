@@ -21,6 +21,11 @@ export async function findSkillById(pool: DbPool, id: string): Promise<Skill | u
   return result.rows[0] ? mapSkillRow(result.rows[0]) : undefined;
 }
 
+export async function findSkillBySlug(pool: DbPool, slug: string): Promise<Skill | undefined> {
+  const result = await pool.query('SELECT * FROM skills WHERE slug = $1', [slug]);
+  return result.rows[0] ? mapSkillRow(result.rows[0]) : undefined;
+}
+
 export async function findSkillsByIds(pool: DbPool, ids: string[]): Promise<Skill[]> {
   if (ids.length === 0) {
     return [];

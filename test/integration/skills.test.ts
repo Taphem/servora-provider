@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { ADMIN_HEADERS, buildTestApp, PROVIDER_HEADERS, resetDatabase, type TestApp } from '../helpers/buildTestApp.js';
+import { ADMIN_HEADERS, buildTestApp, CUSTOMER_HEADERS, PROVIDER_HEADERS, resetDatabase, type TestApp } from '../helpers/buildTestApp.js';
 import { isInfraAvailable } from './helpers.js';
 
 async function createSkill(testApp: TestApp, name = 'AC Technician') {
@@ -121,6 +121,38 @@ describe.skipIf(!isInfraAvailable())('skills catalog', () => {
     });
     expect(inactiveAttempt.statusCode).toBe(400);
     expect(inactiveAttempt.json().error.code).toBe('SKILL_INACTIVE');
+  });
+
+  it('lets a provider self-create a skill not already in the catalog, and reuses it on a repeat name', async () => {
+    const created = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/v1/providers/me/skills',
+      headers: PROVIDER_HEADERS,
+      payload: { name: 'Split AC Servicing' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ name: 'Split AC Servicing', slug: 'split-ac-servicing', status: 'ACTIVE' });
+
+    // A second provider typing the same name (or the same provider retyping
+    // it) must land on the same shared skill row, not a duplicate.
+    const again = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/v1/providers/me/skills',
+      headers: PROVIDER_HEADERS,
+      payload: { name: 'split ac servicing' },
+    });
+    expect(again.statusCode).toBe(201);
+    expect(again.json().id).toBe(created.json().id);
+  });
+
+  it('requires a BUSINESS_OWNER identity to self-create a skill', async () => {
+    const response = await testApp.app.inject({
+      method: 'POST',
+      url: '/api/v1/providers/me/skills',
+      headers: CUSTOMER_HEADERS,
+      payload: { name: 'Split AC Servicing' },
+    });
+    expect(response.statusCode).toBe(403);
   });
 
   it('rejects duplicate skillIds in a single replace request', async () => {
